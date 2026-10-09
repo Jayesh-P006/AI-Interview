@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Recruiter - Intelligent Mock Interview Platform</title>
+
+  <!-- Google Fonts: Inter & Plus Jakarta Sans for crisp executive typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Executive Light Design System -->
+  <link rel="stylesheet" href="/css/style.css">
+
+  <!-- Three.js ES Modules Import Map -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.150.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <!-- Client-Side AI Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+</head>
+
+<body>
+
+  <div class="app-container">
+
+    <!-- EXECUTIVE BRAND NAVIGATION BAR -->
+    <header class="brand-nav">
+      <div class="brand-identity">
+        <div class="brand-logo-mark">
+          <i class="fa-solid fa-brain"></i>
+        </div>
+        <div class="brand-text-group">
+          <div class="brand-name">
+            TalentAI Recruiter
+            <span class="brand-badge">Enterprise Edition</span>
+          </div>
+          <span class="brand-subtitle">AI-Assisted Technical Assessment & Live Virtual Interview</span>
+        </div>
+      </div>
+      <div class="brand-actions">
+        <button type="button" class="btn btn-secondary" id="gcp-config-btn" style="padding: 6px 14px; font-size: 12.5px; border-radius: 9999px;">
+          <i class="fa-brands fa-google" style="color: #4285f4; margin-right: 5px;"></i>
+          <span>Gemini 2.5 Flash & ADC</span>
+        </button>
+        <div class="status-pill">
+          <span class="status-indicator-dot online"></span>
+          <span id="header-engine-status">Gemini 2.5 Flash Ready</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ====================================================================
+         1. LOBBY SCREEN (GUIDED FLOW-BY-FLOW WORKFLOW)
+         ==================================================================== -->
+    <main id="lobby-screen" class="screen-view active">
+      <div class="lobby-flow-container">
+
+        <!-- Top Flow Stepper -->
+        <nav class="flow-wizard-stepper" aria-label="Interview Setup Workflow">
+          <button type="button" class="wizard-step-item active" id="wizard-step-btn-1">
+            <span class="wizard-step-circle">1</span>
+            <div class="wizard-step-label-group">
+              <span class="wizard-step-title">Role & Profile</span>
+              <span class="wizard-step-desc">Target criteria</span>
+            </div>
+          </button>
+          <div class="wizard-step-divider" id="wizard-divider-1"></div>
+          <button type="button" class="wizard-step-item" id="wizard-step-btn-2">
+            <span class="wizard-step-circle">2</span>
+            <div class="wizard-step-label-group">
+              <span class="wizard-step-title">Hardware Verification</span>
+              <span class="wizard-step-desc">Media diagnostics</span>
+            </div>
+          </button>
+          <div class="wizard-step-divider" id="wizard-divider-2"></div>
+          <button type="button" class="wizard-step-item" id="wizard-step-btn-3">
+            <span class="wizard-step-circle">3</span>
+            <div class="wizard-step-label-group">
+              <span class="wizard-step-title">Proctoring Protocol</span>
+              <span class="wizard-step-desc">Integrity agreement</span>
+            </div>
+          </button>
+        </nav>
+
+        <form id="setup-form">
+
+          <!-- --------------------------------------------------------------
+               FLOW STEP 1: CANDIDATE & ROLE SETUP
+               -------------------------------------------------------------- -->
+          <section class="lobby-step-card active" id="lobby-step-1">
+            <div class="step-card-header">
+              <div class="step-card-header-left">
+                <span class="step-eyebrow">Step 1 of 3</span>
+                <h1 class="step-title">Candidate Profile & Interview Scope</h1>
+                <p class="step-subtitle">Configure your mock interview parameters, technical domain, and assessment level.</p>
+              </div>
+            </div>
+
+            <div class="form-grid-two-col">
+              <!-- Candidate Name -->
+              <div class="form-group">
+                <label for="candidate-name">
+                  <i class="fa-solid fa-user"></i> Candidate Full Name
+                </label>
+                <div class="input-wrapper">
+                  <i class="fa-solid fa-id-card"></i>
+                  <input type="text" id="candidate-name" placeholder="e.g. Alexander Vance" required value="Alexander Vance">
+                </div>
+              </div>
+
+              <!-- Customization Mode -->
+              <div class="form-group">
+                <label for="interview-mode">
+                  <i class="fa-solid fa-sliders"></i> Assessment Customization Mode
+                </label>
+                <div class="input-wrapper">
+                  <i class="fa-solid fa-diagram-project"></i>
+                  <select id="interview-mode">
+                    <option value="topic" selected>Topic-Wise (Specific Role / Technical Domain)</option>
+                    <option value="resume">Resume-Based (Upload CV / Skills Parsing)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Target Topic / Role -->
+              <div class="form-group full-width" id="topic-input-group">
+                <label for="interview-topic">
+                  <i class="fa-solid fa-briefcase"></i> Target Technical Role or Topic
+                </label>
+                <div class="input-wrapper">
+                  <i class="fa-solid fa-code"></i>
+                  <input type="text" id="interview-topic" placeholder="e.g. Senior React Developer, Python AI Engineer, DevOps Architect" required value="React Developer">
+                </div>
+                <!-- Popular Role Suggestion Chips -->
+                <div class="topic-chips-wrapper">
+                  <span class="topic-chip active" data-topic="React Developer">React Developer</span>
+                  <span class="topic-chip" data-topic="Full Stack Engineer">Full Stack Engineer</span>
+                  <span class="topic-chip" data-topic="Node.js Backend Developer">Node.js Backend</span>
+                  <span class="topic-chip" data-topic="Python & AI Engineer">Python / AI Engineer</span>
+                  <span class="topic-chip" data-topic="Data Scientist">Data Scientist</span>
+                  <span class="topic-chip" data-topic="Product Manager">Product Manager</span>
+                </div>
+              </div>
+
+              <!-- Resume Upload Group (Hidden by default, shown when mode=resume) -->
+              <div class="form-group full-width hidden-mode" id="resume-upload-group">
+                <label>
+                  <i class="fa-solid fa-file-pdf"></i> Upload Candidate Resume (PDF / TXT)
+                </label>
+                <div class="resume-dropzone" id="resume-dropzone" onclick="document.getElementById('resume-upload').click();">
+                  <i class="fa-solid fa-cloud-arrow-up resume-dropzone-icon"></i>
+                  <strong style="font-size: 14px; color: var(--text-main);" id="resume-upload-label">Click or Drag to Upload Resume</strong>
+                  <span style="font-size: 12px; color: var(--text-muted);">PDF and plain text documents supported (max 10MB)</span>
+                  <input type="file" id="resume-upload" accept=".pdf,.txt" style="display: none;">
+                </div>
+                <div id="resume-status" class="glass-alert" style="margin-top: 10px; display: none; background: var(--color-success-tint); border-color: var(--color-success-border); color: var(--color-success-text);">
+                  <i class="fa-solid fa-circle-check" style="color: var(--color-success);"></i>
+                  <span>Resume parsed successfully: <strong id="resume-details" style="color: var(--text-main);">0 skills detected</strong></span>
+                </div>
+              </div>
+
+              <!-- Target Seniority -->
+              <div class="form-group">
+                <label for="interview-difficulty">
+                  <i class="fa-solid fa-layer-group"></i> Seniority Level
+                </label>
+                <div class="input-wrapper">
+                  <i class="fa-solid fa-graduation-cap"></i>
+                  <select id="interview-difficulty">
+                    <option value="Junior">Junior Engineer (Foundational)</option>
+                    <option value="Mid-Level" selected>Mid-Level Engineer (Standard)</option>
+                    <option value="Senior">Senior Engineer (Advanced / Architecture)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Question Count -->
+              <div class="form-group">
+                <label for="question-count">
+                  <i class="fa-solid fa-list-ol"></i> Assessment Question Volume
+                </label>
+                <div class="input-wrapper">
+                  <i class="fa-solid fa-clock"></i>
+                  <select id="question-count">
+                    <option value="3">3 Questions (~10 mins)</option>
+                    <option value="5" selected>5 Questions (~18 mins)</option>
+                    <option value="8">8 Questions (~30 mins)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Coding Challenge Toggle -->
+              <div class="form-group">
+                <label for="include-coding">
+                  <i class="fa-solid fa-laptop-code"></i> Practical Coding Assessment
+                </label>
+                <div class="input-wrapper">
+                  <i class="fa-solid fa-terminal"></i>
+                  <select id="include-coding">
+                    <option value="yes" selected>Yes, include live coding challenge round</option>
+                    <option value="no">No, theoretical questions only</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Interview Language & Dialect -->
+              <div class="form-group full-width">
+                <label for="interview-language">
+                  <i class="fa-solid fa-language"></i> Define Interview Language & Dialect
+                </label>
+                <!-- Quick Language Selection Chips -->
+                <div class="language-chips-wrapper">
+                  <span class="language-chip active" data-lang="en-IN">English (Global / IN)</span>
+                  <span class="language-chip" data-lang="en-US">English (US)</span>
+                  <span class="language-chip" data-lang="hi-IN">Hindi (हिन्दी)</span>
+                  <span class="language-chip" data-lang="hinglish">Hinglish (Tech Blend)</span>
+                  <span class="language-chip" data-lang="es-ES">Spanish (Español)</span>
+                  <span class="language-chip" data-lang="fr-FR">French (Français)</span>
+                  <span class="language-chip" data-lang="de-DE">German (Deutsch)</span>
+                  <span class="language-chip" data-lang="ja-JP">Japanese (日本語)</span>
+                  <span class="language-chip" data-lang="custom"><i class="fa-solid fa-pen-to-square"></i> Other / Custom</span>
+                </div>
+                <div class="input-wrapper" style="margin-top: 6px;">
+                  <i class="fa-solid fa-earth-americas"></i>
+                  <select id="interview-language">
+                    <option value="en-IN" selected>English (Indian / Global Accent)</option>
+                    <option value="en-US">English (US / North America)</option>
+                    <option value="en-GB">English (UK / British)</option>
+                    <option value="hi-IN">Hindi (हिन्दी - Devanagari & Spoken)</option>
+                    <option value="hinglish">Hinglish (Conversational Tech Hindi + English)</option>
+                    <option value="es-ES">Spanish (Español - Castilian / Latin American)</option>
+                    <option value="fr-FR">French (Français)</option>
+                    <option value="de-DE">German (Deutsch)</option>
+                    <option value="ja-JP">Japanese (日本語)</option>
+                    <option value="custom">Other / Define Custom Language...</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Custom User-Defined Language Input (shown when 'custom' is selected) -->
+              <div class="form-group full-width" id="custom-language-input-group" style="display: none; margin-top: -6px;">
+                <label for="custom-language-input">
+                  <i class="fa-solid fa-pen-nib"></i> Specify Your Preferred Language
+                </label>
+                <div class="input-wrapper">
+                  <i class="fa-solid fa-globe"></i>
+                  <input type="text" id="custom-language-input" placeholder="e.g. Kannada, Tamil, Telugu, Marathi, Bengali, Portuguese, Italian..." />
+                </div>
+                <small class="form-hint" style="font-size: 11.5px; color: var(--text-muted); display: block; margin-top: 4px;">
+                  <i class="fa-solid fa-circle-info" style="color: var(--color-primary);"></i> The AI recruiter will adapt all technical questions, speech recognition, doubt counters, and reports to your defined language.
+                </small>
+              </div>
+
+              <!-- Interaction Modality -->
+              <div class="form-group">
+                <label for="interview-modality">
+                  <i class="fa-solid fa-headset"></i> Interaction Modality
+                </label>
+                <div class="input-wrapper">
+                  <i class="fa-solid fa-microphone-lines"></i>
+                  <select id="interview-modality">
+                    <option value="voice-and-text" selected>Voice + Text (Google Cloud TTS & STT)</option>
+                    <option value="text-only">Text Only (Silent Mode / Low Bandwidth)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Core Model Engine -->
+              <div class="form-group">
+                <label for="ai-engine-select">
+                  <i class="fa-brands fa-google"></i> Model Engine
+                </label>
+                <div class="input-wrapper">
+                  <i class="fa-solid fa-brain"></i>
+                  <select id="ai-engine-select">
+                    <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash (Google Cloud ADC - Primary)</option>
+                    <option value="groq-llama">Groq Llama 3.3 (High-Speed Fallback)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Optional Custom Groq API Key -->
+              <div class="form-group">
+                <label for="groq-key">
+                  <i class="fa-solid fa-key"></i> Secondary Groq API Key <span class="label-hint">(Optional Fallback)</span>
+                </label>
+                <div class="input-wrapper">
+                  <i class="fa-solid fa-lock"></i>
+                  <input type="password" id="groq-key" placeholder="Server default key is used if left blank">
+                </div>
+              </div>
+            </div>
+
+            <div class="step-card-actions">
+              <div></div>
+              <button type="button" class="btn btn-primary" id="lobby-next-to-step-2">
+                <span>Proceed to Device Diagnostics</span>
+                <i class="fa-solid fa-arrow-right"></i>
+              </button>
+            </div>
+          </section>
+
+          <!-- --------------------------------------------------------------
+               FLOW STEP 2: HARDWARE & MEDIA DIAGNOSTICS
+               -------------------------------------------------------------- -->
+          <section class="lobby-step-card" id="lobby-step-2">
+            <div class="step-card-header">
+              <div class="step-card-header-left">
+                <span class="step-eyebrow">Step 2 of 3</span>
+                <h1 class="step-title">Hardware & Media Diagnostics</h1>
+                <p class="step-subtitle">Ensure your video cameras and audio channels are calibrated for proctored virtual communication.</p>
+              </div>
+            </div>
+
+            <div class="devices-split-grid">
+              <!-- Left Column: Video Feeds -->
+              <div>
+                <h3 style="font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                  <i class="fa-solid fa-video" style="color: var(--color-primary);"></i> Primary Camera Feed Preview
+                </h3>
+                <div class="test-video-container">
+                  <video id="lobby-preview" autoplay muted playsinline></video>
+                  <div class="test-video-overlay" id="lobby-preview-overlay">
+                    <i class="fa-solid fa-video-slash" style="font-size: 24px;"></i>
+                    <p>Initializing camera preview...</p>
+                  </div>
+                  <div class="lobby-volume-bar-container">
+                    <div id="lobby-volume-indicator"></div>
+                  </div>
+                </div>
+
+                <div class="device-status">
+                  <div class="status-item">
+                    <span class="status-dot green" id="cam-status"></span>
+                    <span>Webcam Signal Active</span>
+                  </div>
+                  <div class="status-item">
+                    <span class="status-dot green" id="mic-status"></span>
+                    <span>Microphone Input Detected</span>
+                  </div>
+                </div>
+
+                <!-- Secondary Camera Configuration -->
+                <div class="secondary-camera-box">
+                  <h4 style="font-size: 13.5px; font-weight: 700; color: var(--text-main); margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-camera-rotate" style="color: var(--color-primary);"></i> Compulsory Secondary Proctoring Feed
+                  </h4>
+                  <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+                    A secondary view of your desk space is required to ensure testing room integrity.
+                  </p>
+
+                  <div class="form-group" style="margin-bottom: 10px;">
+                    <div class="input-wrapper">
+                      <i class="fa-solid fa-mobile-screen-button"></i>
+                      <select id="secondary-camera-mode" required>
+                        <option value="" disabled selected>Select secondary camera option... (Compulsory)</option>
+                        <option value="webcam">Connect additional USB Webcam</option>
+                        <option value="phone">Use Mobile Phone (Instant WebRTC QR Code)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- USB Webcam Dropdown -->
+                  <div class="form-group" id="secondary-camera-select-group" style="display: none; margin-bottom: 0;">
+                    <label for="secondary-camera-select" style="font-size: 12px;">Select USB Secondary Webcam</label>
+                    <div class="input-wrapper">
+                      <i class="fa-solid fa-camera"></i>
+                      <select id="secondary-camera-select">
+                        <option value="">Choose camera...</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- Phone QR Code Connect Station -->
+                  <div id="phone-camera-connect-group" style="display: none;">
+                    <span style="font-size: 13px; font-weight: 700; color: var(--text-main); display: block; margin-bottom: 4px;">
+                      Scan to Link Smartphone
+                    </span>
+                    <div id="phone-qr-container">
+                      <i class="fa-solid fa-spinner fa-spin" style="color: var(--color-primary); font-size: 20px;"></i>
+                    </div>
+                    <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.45;">
+                      Connect smartphone to same network, scan QR, and allow camera access.
+                    </p>
+                    <div id="phone-status-info" style="font-size: 12px; font-weight: 600; color: var(--color-warning); margin-top: 8px; display: inline-flex; align-items: center; gap: 6px;">
+                      <span class="status-dot-blink"></span>
+                      <span>Waiting for smartphone stream...</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right Column: Audio & Device Diagnostics -->
+              <div class="device-testing-well">
+                <h3 style="font-size: 14px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                  <i class="fa-solid fa-sliders" style="color: var(--color-primary);"></i> Audio Device Calibration
+                </h3>
+
+                <!-- Primary Camera Selector -->
+                <div class="form-group" style="margin-bottom: 14px;">
+                  <label for="camera-select">Primary Camera Device</label>
+                  <div class="input-wrapper">
+                    <i class="fa-solid fa-video"></i>
+                    <select id="camera-select">
+                      <option value="">Default Camera</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Microphone Device Selector & Test -->
+                <div class="form-group" style="margin-bottom: 14px;">
+                  <label for="mic-select">Microphone Device</label>
+                  <div class="input-wrapper">
+                    <i class="fa-solid fa-microphone"></i>
+                    <select id="mic-select">
+                      <option value="">Default Microphone</option>
+                    </select>
+                  </div>
+                  <button type="button" id="test-mic-btn" class="btn btn-secondary" style="margin-top: 8px; font-size: 13px;">
+                    <i class="fa-solid fa-microphone-lines"></i> Test Microphone (Record & Playback)
+                  </button>
+                </div>
+
+                <!-- Speaker Device Selector & Voice Sample -->
+                <div class="form-group" id="speaker-select-group" style="margin-bottom: 14px;">
+                  <label for="speaker-select">Audio Output (Speaker / Headphones)</label>
+                  <div class="input-wrapper">
+                    <i class="fa-solid fa-headphones"></i>
+                    <select id="speaker-select">
+                      <option value="">Default Speaker</option>
+                    </select>
+                  </div>
+                  <button type="button" id="test-speaker-btn" class="btn btn-secondary" style="margin-top: 8px; font-size: 13px;">
+                    <i class="fa-solid fa-volume-high"></i> Test Recruiter Voice Sample
+                  </button>
+                </div>
+
+                <div class="glass-alert">
+                  <i class="fa-solid fa-circle-info"></i>
+                  <p style="font-size: 12px; line-height: 1.45; color: var(--text-body);">
+                    <strong>Acoustic Recommendation:</strong> Use headphones to prevent microphone audio loopback and ensure quiet surroundings for crisp transcription.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="step-card-actions">
+              <button type="button" class="btn btn-secondary" id="lobby-back-to-step-1">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Back to Profile</span>
+              </button>
+              <button type="button" class="btn btn-primary" id="lobby-next-to-step-3">
+                <span>Proceed to Proctoring Protocol</span>
+                <i class="fa-solid fa-arrow-right"></i>
+              </button>
+            </div>
+          </section>
+
+          <!-- --------------------------------------------------------------
+               FLOW STEP 3: PROCTORING PROTOCOL & LAUNCH
+               -------------------------------------------------------------- -->
+          <section class="lobby-step-card" id="lobby-step-3">
+            <div class="step-card-header">
+              <div class="step-card-header-left">
+                <span class="step-eyebrow">Step 3 of 3</span>
+                <h1 class="step-title">Proctoring Rules & Assessment Agreement</h1>
+                <p class="step-subtitle">Review the automated integrity standards enforced during your live technical interview.</p>
+              </div>
+            </div>
+
+            <div class="rules-grid">
+              <div class="rule-card">
+                <div class="rule-icon-box"><i class="fa-solid fa-expand"></i></div>
+                <div class="rule-content">
+                  <h4>Fullscreen Enforcement</h4>
+                  <p>Exiting mandatory fullscreen triggers an automated warning and halts the evaluation session.</p>
+                </div>
+              </div>
+
+              <div class="rule-card">
+                <div class="rule-icon-box"><i class="fa-solid fa-window-restore"></i></div>
+                <div class="rule-content">
+                  <h4>Tab & Application Focus</h4>
+                  <p>Switching browser tabs or focusing external windows is recorded as an integrity strike.</p>
+                </div>
+              </div>
+
+              <div class="rule-card">
+                <div class="rule-icon-box"><i class="fa-solid fa-eye"></i></div>
+                <div class="rule-content">
+                  <h4>AI Gaze & Head Orientation</h4>
+                  <p>MediaPipe facial landmark tracking evaluates head turning and persistent looking away actions.</p>
+                </div>
+              </div>
+
+              <div class="rule-card">
+                <div class="rule-icon-box"><i class="fa-solid fa-mobile-screen"></i></div>
+                <div class="rule-content">
+                  <h4>Secondary Camera Audit</h4>
+                  <p>Your secondary camera feed is evaluated dynamically via computer vision for unauthorized phone use.</p>
+                </div>
+              </div>
+
+              <div class="rule-card">
+                <div class="rule-icon-box"><i class="fa-solid fa-ban"></i></div>
+                <div class="rule-content">
+                  <h4>Clipboard & DevTools Block</h4>
+                  <p>Right-click context menus, copy-pasting, and inspection shortcut keys are deactivated.</p>
+                </div>
+              </div>
+
+              <div class="rule-card">
+                <div class="rule-icon-box"><i class="fa-solid fa-volume-high"></i></div>
+                <div class="rule-content">
+                  <h4>Acoustic Environment Monitor</h4>
+                  <p>Background human voices, whispering, and unauthorized assistance are flagged.</p>
+                </div>
+              </div>
+
+              <div class="rule-card">
+                <div class="rule-icon-box"><i class="fa-solid fa-desktop"></i></div>
+                <div class="rule-content">
+                  <h4>Extended Displays Prohibited</h4>
+                  <p>Secondary physical monitors are prohibited and periodically audited during the session.</p>
+                </div>
+              </div>
+
+              <div class="rule-card">
+                <div class="rule-icon-box"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <div class="rule-content">
+                  <h4>5-Strike Disqualification Rule</h4>
+                  <p>Accumulating 5 infractions in any category automatically voids the assessment score.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Agreement Acknowledgement -->
+            <div class="agreement-box">
+              <input type="checkbox" id="proctoring-agreement" class="agreement-checkbox" checked>
+              <label for="proctoring-agreement" class="agreement-label">
+                I have read and agree to comply with the proctoring protocols and academic integrity rules outlined above.
+              </label>
+            </div>
+
+            <div class="step-card-actions">
+              <button type="button" class="btn btn-secondary" id="lobby-back-to-step-2">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Back to Diagnostics</span>
+              </button>
+              <button type="submit" class="btn btn-primary" id="start-interview-submit-btn" style="padding: 12px 28px; font-size: 14px;">
+                <i class="fa-solid fa-video"></i>
+                <span>Review & Launch Mock Interview</span>
+              </button>
+            </div>
+          </section>
+
+        </form>
+      </div>
+    </main>
+
+    <!-- ====================================================================
+         2. LIVE INTERVIEW SCREEN (CALL & CODING WORKSPACE)
+         ==================================================================== -->
+    <main id="interview-screen" class="screen-view">
+
+      <!-- Quiz Stepper -->
+      <div class="quiz-stepper" id="quiz-stepper">
+        <div class="step step-verbal active" id="step-verbal-indicator">
+          <span class="step-num">1</span>
+          <span class="step-label">Verbal Technical Round</span>
+        </div>
+        <div class="step-divider" id="step-divider-1"></div>
+        <div class="step step-coding" id="step-coding-indicator">
+          <span class="step-num">2</span>
+          <span class="step-label">Coding Assessment</span>
+        </div>
+        <div class="step-divider" id="step-divider-2"></div>
+        <div class="step step-report" id="step-report-indicator">
+          <span class="step-num">3</span>
+          <span class="step-label">Evaluation Report</span>
+        </div>
+      </div>
+
+      <!-- Call Header -->
+      <header class="call-header">
+        <div class="call-title-area">
+          <div class="live-indicator">
+            <span class="live-dot"></span>
+            <span>LIVE SESSION</span>
+          </div>
+          <h2 id="call-topic-display">React Developer - Mid-Level</h2>
+        </div>
+        <div class="call-stats-area">
+          <div class="stat-badge" id="hud-model-badge">
+            <i class="fa-brands fa-google" style="color: #4285f4;"></i>
+            <span id="hud-model-name">Gemini 2.5 Flash</span>
+          </div>
+          <div class="stat-badge" id="hud-lang-badge">
+            <i class="fa-solid fa-language"></i>
+            <span id="hud-lang-name">English</span>
+          </div>
+          <div class="stat-badge">
+            <i class="fa-solid fa-clock"></i>
+            <span id="call-timer">00:00</span>
+          </div>
+          <div class="stat-badge">
+            <i class="fa-solid fa-clipboard-question"></i>
+            <span id="question-progress">Q 1 / 5</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Dynamic Workspace Wrapper -->
+      <div class="interview-workspace-wrapper">
+
+        <!-- Coding Assessment Workspace (Toggled during practical round) -->
+        <div class="coding-workspace" id="coding-workspace">
+          <div class="coding-workspace-left">
+            <h3 id="coding-problem-title">Coding Challenge: Loading...</h3>
+            <div class="coding-problem-desc" id="coding-problem-desc">
+              Loading challenge statement...
+            </div>
+            <div class="test-cases-section">
+              <h4>Test Cases & Validations</h4>
+              <div class="test-cases-list" id="test-cases-list">
+                <!-- Test cases dynamically injected -->
+              </div>
+            </div>
+          </div>
+
+          <div class="coding-workspace-right">
+            <div class="editor-header">
+              <span class="editor-lang-badge"><i class="fa-brands fa-js icon-accent" style="color: #ca8a04; margin-right: 4px;"></i> JavaScript</span>
+              <button type="button" id="run-tests-btn" class="btn btn-secondary" style="padding: 6px 14px; font-size: 12.5px;">
+                <i class="fa-solid fa-play"></i> Run Tests
+              </button>
+            </div>
+            <textarea id="code-editor" class="code-editor-textarea" spellcheck="false" placeholder="// Write your solution implementation here..."></textarea>
+            <div class="coding-actions">
+              <button type="button" id="submit-code-btn" class="btn btn-primary btn-block">
+                <i class="fa-solid fa-circle-check"></i> Submit Coding Test
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Video Feeds Grid -->
+        <div class="call-grid">
+          <!-- 1. AI Recruiter 3D Avatar Pane -->
+          <div class="video-window recruiter-window">
+            <div id="canvas-container"></div>
+            <div class="avatar-loader" id="avatar-loader">
+              <div class="spinner"></div>
+              <p>Initializing 3D Recruiter Avatar...</p>
+            </div>
+            <div class="video-label recruiter">
+              <i class="fa-solid fa-user-tie"></i>
+              <span>AI Recruiter (Victoria)</span>
+            </div>
+            <!-- Live Spoken Subtitle Overlay -->
+            <div class="subtitle-overlay" id="subtitle-overlay">
+              <div class="subtitle-text" id="subtitle-text">
+                Initializing the session. Please stand by...
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Candidate Webcam Feed -->
+          <div class="video-window candidate-window">
+            <video id="candidate-webcam" autoplay muted playsinline></video>
+            <div class="video-label candidate">
+              <i class="fa-solid fa-circle-user"></i>
+              <span id="candidate-label">Candidate (You)</span>
+            </div>
+            <!-- Proctor Metric Overlay -->
+            <div class="proctor-status-indicator" id="proctor-status-indicator" style="display: none;">
+              <span class="proctor-metric" id="proctor-metric-face">
+                <i class="fa-solid fa-user"></i> Face: <span class="status-text green">OK</span>
+              </span>
+              <span class="proctor-metric" id="proctor-metric-gaze">
+                <i class="fa-solid fa-eye"></i> Gaze: <span class="status-text green">OK</span>
+              </span>
+              <span class="proctor-metric" id="proctor-metric-audio">
+                <i class="fa-solid fa-volume-high"></i> Audio: <span class="status-text green">OK</span>
+              </span>
+            </div>
+            <!-- Candidate Speech-to-Text Overlay -->
+            <div class="stt-overlay" id="stt-overlay">
+              <div class="stt-header">
+                <i class="fa-solid fa-microphone-lines"></i>
+                <span>Transcribing Speech...</span>
+              </div>
+              <div class="stt-transcript" id="stt-transcript-text">
+                Speak clearly, your answer will be transcribed here in real time...
+              </div>
+            </div>
+            <!-- Microphone Audio Level Meter -->
+            <div class="volume-bar-container">
+              <div class="volume-bar" id="volume-indicator"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Collapsible Transcript Drawer -->
+        <div class="chat-container collapsed" id="chat-container">
+          <div class="chat-header">
+            <h3><i class="fa-solid fa-comments"></i> Transcript History</h3>
+            <button id="toggle-chat-btn" class="control-btn" style="width: 30px; height: 30px; font-size: 12px;"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div class="chat-messages" id="chat-log">
+            <div class="message recruiter-msg">
+              <span class="msg-sender">AI Recruiter</span>
+              <div class="msg-bubble">Interview session initialized. Waiting to begin...</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Call Control Footer Dock -->
+      <footer class="call-controls">
+        <div class="control-section left">
+          <button id="mic-toggle-btn" class="control-btn" title="Toggle Microphone">
+            <i class="fa-solid fa-microphone"></i>
+          </button>
+          <button id="cam-toggle-btn" class="control-btn" title="Toggle Camera">
+            <i class="fa-solid fa-video"></i>
+          </button>
+          <button id="chat-toggle-btn" class="control-btn" title="Toggle Transcript Drawer">
+            <i class="fa-solid fa-message"></i>
+          </button>
+        </div>
+
+        <div class="control-section center">
+          <div class="speech-control-area">
+            <div id="mic-status-badge" class="mic-status-badge">
+              <i class="fa-solid fa-microphone"></i>
+              <span id="mic-status-text">Microphone Active</span>
+            </div>
+            <div class="text-input-fallback" id="text-input-fallback-wrapper">
+              <input type="text" id="candidate-text-response" placeholder="Type text answer if microphone unavailable...">
+              <button id="submit-text-btn" class="btn btn-secondary-icon" style="padding: 8px 12px;"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-section right">
+          <button id="end-interview-btn" class="btn btn-danger">
+            <i class="fa-solid fa-phone-slash"></i>
+            <span>End Call</span>
+          </button>
+        </div>
+      </footer>
+    </main>
+
+    <!-- ====================================================================
+         3. PERFORMANCE REPORT SCREEN (EVALUATION DASHBOARD)
+         ==================================================================== -->
+    <main id="report-screen" class="screen-view">
+      <header class="report-header">
+        <div class="brand-badge" style="margin-bottom: 8px;">Executive Summary</div>
+        <h1>Candidate Evaluation Report</h1>
+        <p>Comprehensive performance metrics, competency feedback, and academic integrity audit.</p>
+      </header>
+
+      <div class="report-dashboard-grid">
+        <!-- Left Sidebar: Score Gauge, Strengths & Tips -->
+        <div class="report-sidebar">
+          <!-- Circular Score Card -->
+          <div class="glass-panel score-card" style="margin-bottom: 20px;">
+            <h2>Overall Score</h2>
+            <div class="progress-ring-container">
+              <svg class="progress-ring" width="180" height="180">
+                <circle class="progress-ring-circle-bg" stroke="#e2e8f0" stroke-width="12" fill="transparent" r="76" cx="90" cy="90" />
+                <circle class="progress-ring-circle" id="report-score-circle" stroke="#2563eb" stroke-dasharray="477.5" stroke-dashoffset="477.5" stroke-width="12" stroke-linecap="round" fill="transparent" r="76" cx="90" cy="90" />
+              </svg>
+              <div class="score-display">
+                <span id="report-score-value">0</span><span class="pct">%</span>
+              </div>
+            </div>
+            <div class="score-badge" id="report-level-badge">PASSED</div>
+          </div>
+
+          <!-- Strengths & Improvements -->
+          <div class="glass-panel analysis-card" style="margin-bottom: 20px;">
+            <div class="analysis-column strengths">
+              <h3 style="color: var(--color-success);"><i class="fa-solid fa-circle-check"></i> Demonstrated Strengths</h3>
+              <ul id="strengths-list"></ul>
+            </div>
+            <div class="analysis-column improvements">
+              <h3 style="color: var(--color-warning);"><i class="fa-solid fa-circle-exclamation"></i> Growth & Development Areas</h3>
+              <ul id="improvements-list"></ul>
+            </div>
+          </div>
+
+          <!-- Actionable Tips -->
+          <div class="glass-panel tips-card">
+            <h2><i class="fa-solid fa-lightbulb" style="color: var(--color-primary);"></i> Recommended Action Items</h2>
+            <ul class="tips-list" id="tips-list"></ul>
+          </div>
+        </div>
+
+        <!-- Right Main Panel: Coding Evaluation & Granular Breakdown -->
+        <div class="report-main-content">
+          <!-- Executive Formal Natural Evaluation Card -->
+          <div class="glass-panel breakdown-card" id="executive-evaluation-card" style="margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <h2 style="margin-bottom: 0;"><i class="fa-solid fa-file-contract" style="color: var(--color-primary);"></i> Formal Executive Evaluation</h2>
+              <span id="eval-hiring-badge" class="score-badge" style="background: rgba(37, 99, 235, 0.1); color: var(--color-primary); border-color: rgba(37, 99, 235, 0.2);">Evaluation Complete</span>
+            </div>
+            <div id="executive-evaluation-content">
+              <!-- Dynamically rendered -->
+            </div>
+          </div>
+
+          <!-- Candidate Competency & Skill Map Card -->
+          <div class="glass-panel breakdown-card" id="skill-map-card" style="margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <h2 style="margin-bottom: 0;"><i class="fa-solid fa-chart-pie" style="color: var(--color-primary);"></i> Candidate Competency & Skill Map</h2>
+              <span id="skill-map-summary-badge" class="score-badge" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.2);">Skill Matrix</span>
+            </div>
+            <div id="skill-map-container" class="skill-map-grid">
+              <!-- Dynamically rendered -->
+            </div>
+          </div>
+
+          <!-- Coding Challenge Card -->
+          <div class="glass-panel breakdown-card" id="coding-report-card" style="margin-bottom: 20px;">
+            <h2><i class="fa-solid fa-code" style="color: var(--color-primary);"></i> Practical Coding Evaluation</h2>
+            <div class="coding-report-content">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                <h4 id="report-coding-title" style="font-size: 15px; font-weight: 700;">Challenge Title</h4>
+                <span class="score-badge" id="report-coding-pass-badge">Passed</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                  <h5 style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Submitted Code</h5>
+                  <pre style="background: var(--bg-subtle); border: 1px solid var(--border-light); padding: 14px; border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 12px; max-height: 240px; overflow-x: auto;"><code id="report-coding-code">// Code snippet</code></pre>
+                </div>
+                <div>
+                  <h5 style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Recruiter Code Review</h5>
+                  <div id="report-coding-feedback" style="background: var(--bg-subtle); border: 1px solid var(--border-light); padding: 14px; border-radius: var(--radius-md); font-size: 13px; line-height: 1.5; max-height: 240px; overflow-y: auto;">Feedback text...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Question-by-Question Breakdown -->
+          <div class="glass-panel breakdown-card">
+            <h2><i class="fa-solid fa-list-check" style="color: var(--color-primary);"></i> Question-by-Question Breakdown</h2>
+            <div class="breakdown-list" id="report-breakdown-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="report-actions">
+        <button type="button" id="restart-interview-btn" class="btn btn-primary" style="padding: 12px 28px; font-size: 14px;">
+          <i class="fa-solid fa-rotate-left"></i>
+          <span>Configure New Mock Interview</span>
+        </button>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- ====================================================================
+       MODALS & DIALOGS
+       ==================================================================== -->
+
+  <!-- GLOBAL LOADER -->
+  <div class="loader-overlay" id="global-loader">
+    <div class="loader-panel">
+      <div class="loader-visual"></div>
+      <h3 id="loader-title">Initializing Assessment Room</h3>
+      <p id="loader-desc">Please wait while the virtual interviewer room is calibrated...</p>
+    </div>
+  </div>
+
+  <!-- CONFIRMATION MODAL -->
+  <div class="modal-overlay" id="confirm-modal">
+    <div class="modal-panel">
+      <h2><i class="fa-solid fa-circle-check" style="color: var(--color-primary);"></i> Confirm Session Parameters</h2>
+      <p class="modal-subtitle">Review your assessment configurations and verified devices before commencing the interview.</p>
+
+      <div class="confirm-details-section">
+        <h3>Interview Parameters</h3>
+        <div class="details-grid">
+          <div class="detail-item">
+            <span class="detail-label">Candidate Name</span>
+            <span class="detail-val" id="confirm-candidate-name">-</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Target Role</span>
+            <span class="detail-val" id="confirm-interview-topic">-</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Seniority Level</span>
+            <span class="detail-val" id="confirm-interview-difficulty">-</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Questions</span>
+            <span class="detail-val" id="confirm-question-count">-</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Practical Coding</span>
+            <span class="detail-val" id="confirm-include-coding">-</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Interview Language</span>
+            <span class="detail-val" id="confirm-interview-language">-</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="confirm-devices-section">
+        <h3>Verified Active Hardware</h3>
+        <div class="devices-list">
+          <div class="confirm-device-item">
+            <i class="fa-solid fa-video" style="color: var(--color-primary);"></i>
+            <span class="detail-val" id="confirm-camera-name">Default Camera</span>
+          </div>
+          <div class="confirm-device-item">
+            <i class="fa-solid fa-microphone" style="color: var(--color-primary);"></i>
+            <span class="detail-val" id="confirm-mic-name">Default Microphone</span>
+          </div>
+          <div class="confirm-device-item" id="confirm-speaker-group">
+            <i class="fa-solid fa-volume-high" style="color: var(--color-primary);"></i>
+            <span class="detail-val" id="confirm-speaker-name">Default Speaker</span>
+          </div>
+          <div class="confirm-device-item">
+            <i class="fa-solid fa-camera-rotate" style="color: var(--color-primary);"></i>
+            <span class="detail-val" id="confirm-secondary-camera-name">Not Connected</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="confirm-cancel-btn" class="btn btn-secondary">Cancel</button>
+        <button type="button" id="confirm-start-btn" class="btn btn-primary">Launch Live Interview</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECURITY CHEAT WARNING MODAL -->
+  <div class="modal-overlay" id="cheat-warning-modal">
+    <div class="modal-panel" style="border: 2px solid var(--color-danger); text-align: center; max-width: 460px;">
+      <h2 style="color: var(--color-danger); justify-content: center;">
+        <i class="fa-solid fa-triangle-exclamation"></i> Security Violation Alert
+      </h2>
+      <p class="modal-subtitle" id="cheat-warning-message" style="margin-top: 10px; color: var(--text-main); font-weight: 500;">
+        Tab switch, focus loss, or fullscreen exit detected.
+      </p>
+
+      <div style="background: var(--color-danger-tint); border: 1px solid var(--color-danger-border); border-radius: var(--radius-md); padding: 18px; margin: 16px 0;">
+        <span style="font-size: 12px; font-weight: 700; color: var(--color-danger-text); text-transform: uppercase;">Recorded Violation Strikes</span>
+        <div id="cheat-warning-count" style="font-size: 42px; font-weight: 800; color: var(--color-danger); margin-top: 4px;">0</div>
+      </div>
+
+      <p style="font-size: 12.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 20px;">
+        Assessment protocols mandate strict fullscreen application focus. Accumulating 5 strikes will disqualify this mock interview.
+      </p>
+
+      <button type="button" id="cheat-resume-btn" class="btn btn-danger btn-block" style="padding: 12px;">
+        <i class="fa-solid fa-expand"></i> Resume & Re-enter Fullscreen
+      </button>
+    </div>
+  </div>
+
+  <!-- CUSTOM ALERT POPUP -->
+  <div class="modal-overlay" id="custom-alert-popup" style="z-index: 10005;">
+    <div class="modal-panel" id="custom-alert-box" style="max-width: 420px; text-align: center;">
+      <h3 id="custom-alert-title" style="font-size: 18px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <i class="fa-solid fa-circle-info" style="color: var(--color-primary);"></i> System Notice
+      </h3>
+      <p id="custom-alert-message" style="font-size: 13.5px; color: var(--text-muted); line-height: 1.5;">Alert message</p>
+      <div class="modal-actions" style="justify-content: center; margin-top: 20px;">
+        <button type="button" id="custom-alert-close-btn" class="btn btn-primary" style="padding: 8px 24px;">Understood</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CUSTOM CONFIRM POPUP -->
+  <div class="modal-overlay" id="custom-confirm-popup" style="z-index: 10006;">
+    <div class="modal-panel" id="custom-confirm-box" style="max-width: 420px; text-align: center;">
+      <h3 id="custom-confirm-title" style="font-size: 18px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <i class="fa-solid fa-circle-question" style="color: var(--color-primary);"></i> Confirm Action
+      </h3>
+      <p id="custom-confirm-message" style="font-size: 13.5px; color: var(--text-muted); line-height: 1.5;">Are you sure?</p>
+      <div class="modal-actions" style="justify-content: center; margin-top: 20px;">
+        <button type="button" id="custom-confirm-cancel-btn" class="btn btn-secondary" style="padding: 8px 20px;">Cancel</button>
+        <button type="button" id="custom-confirm-ok-btn" class="btn btn-primary" style="padding: 8px 20px;">Yes, Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GOOGLE CLOUD ADC & GEMINI 2.5 FLASH CONFIGURATION MODAL -->
+  <div class="modal-overlay" id="gcp-config-modal" style="z-index: 10007;">
+    <div class="modal-panel" style="max-width: 580px; text-align: left;">
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px; margin-bottom: 16px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(66, 133, 244, 0.1); color: #4285f4; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+            <i class="fa-brands fa-google"></i>
+          </div>
+          <div>
+            <h3 style="font-size: 16px; font-weight: 700; margin: 0; color: var(--text-main);">Google Cloud ADC & Gemini 2.5 Flash</h3>
+            <span style="font-size: 12px; color: var(--text-muted);">Application Default Credentials, TTS, and Speech-to-Text</span>
+          </div>
+        </div>
+        <button type="button" id="gcp-modal-close-icon" class="btn btn-icon" style="border: none; background: transparent; cursor: pointer; font-size: 16px; color: var(--text-muted);">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <!-- Live Status Row -->
+        <div style="background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">ADC Auth Status:</span>
+            <span class="device-badge" id="gcp-modal-adc-badge" style="font-size: 11px;">Checking...</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 12.5px; color: var(--text-main);">Primary LLM Model:</span>
+            <span style="font-size: 12.5px; font-weight: 600; color: #2563eb;" id="gcp-modal-model-name">gemini-2.5-flash</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 12.5px; color: var(--text-main);">GCP Project ID:</span>
+            <span style="font-size: 12px; font-family: monospace; color: var(--text-muted);" id="gcp-modal-project-id">Detecting...</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 12.5px; color: var(--text-main);">Active TTS Voice:</span>
+            <span style="font-size: 12px; color: var(--text-muted);">Google Cloud Neural2 / Wavenet</span>
+          </div>
+        </div>
+
+        <!-- Project ID Config -->
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="gcp-modal-project-input" style="font-size: 12.5px; margin-bottom: 4px;">
+            <i class="fa-solid fa-diagram-project"></i> GCP Project ID
+          </label>
+          <div class="input-wrapper">
+            <input type="text" id="gcp-modal-project-input" placeholder="e.g. your-gcp-project-id" style="font-size: 13px;">
+          </div>
+        </div>
+
+        <!-- Service Account JSON Key -->
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="gcp-modal-key-json" style="font-size: 12.5px; margin-bottom: 4px;">
+            <i class="fa-solid fa-key"></i> Service Account Key JSON <span class="label-hint">(Paste or leave empty if ADC is logged in)</span>
+          </label>
+          <textarea id="gcp-modal-key-json" class="code-editor-textarea" style="height: 80px; font-size: 11.5px; font-family: monospace;" placeholder='{"type": "service_account", "project_id": "...", ...}'></textarea>
+        </div>
+
+        <!-- Optional Gemini API Key -->
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="gcp-modal-gemini-key" style="font-size: 12.5px; margin-bottom: 4px;">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Direct Gemini API Key <span class="label-hint">(Optional Direct GenAI Fallback)</span>
+          </label>
+          <div class="input-wrapper">
+            <input type="password" id="gcp-modal-gemini-key" placeholder="AIzaSy..." style="font-size: 13px;">
+          </div>
+        </div>
+
+        <div id="gcp-modal-alert" style="display: none; padding: 8px 12px; border-radius: 6px; font-size: 12px;"></div>
+      </div>
+
+      <div class="modal-actions" style="margin-top: 18px; display: flex; justify-content: flex-end; gap: 8px;">
+        <button type="button" id="gcp-modal-close-btn" class="btn btn-secondary" style="padding: 8px 18px; font-size: 13px;">Close</button>
+        <button type="button" id="gcp-modal-save-btn" class="btn btn-primary" style="padding: 8px 18px; font-size: 13px;">
+          <i class="fa-solid fa-check"></i>
+          <span>Save Configuration</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Orchestrator JavaScript Module -->
+  <script type="module" src="/js/app.js"></script>
+</body>
+
+</html>
