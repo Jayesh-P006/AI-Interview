@@ -3003,7 +3003,7 @@ class AppOrchestrator {
   }
 
   // Compile final interview analytics report
-  async compileFinalReport(disqualified = false, disqualificationReason = '') {
+  async compileFinalReport(disqualified = false, disqualificationReason = '', isEarlyExit = false) {
     this.interviewActive = false;
     this.isSpeechActive = false;
     this.clearAllSpeechTimers();
@@ -3021,6 +3021,18 @@ class AppOrchestrator {
     }
     this.stopMobileDetection();
 
+    // If candidate cancelled before submitting any response to history, record active question
+    if (this.chatHistory.length === 0 && this.subtitleText && this.subtitleText.innerText) {
+      this.chatHistory.push({
+        index: this.currentQuestionIndex || 0,
+        question: this.subtitleText.innerText,
+        answer: "(Assessment cancelled without response)",
+        isCounterQuestion: false,
+        doubtReason: null,
+        timestamp: new Date().toISOString()
+      });
+    }
+
     // Show compiling analysis loader
     this.showLoader("Compiling Performance Analytics", "Evaluating technical accuracy, generating career tips, and building report card...");
 
@@ -3037,6 +3049,9 @@ class AppOrchestrator {
       name: this.userName,
       topic: this.topic,
       difficulty: this.difficulty,
+      totalQuestions: this.totalQuestions,
+      currentQuestionIndex: this.currentQuestionIndex,
+      isEarlyExit: isEarlyExit || (this.currentQuestionIndex + 1 < this.totalQuestions),
       history: this.chatHistory,
       codingQuestion: this.currentCodingQuestion,
       codingQuestionsList: this.codingQuestionsList,
@@ -3161,25 +3176,42 @@ class AppOrchestrator {
     const offset = circumference - (score / 100) * circumference;
     this.reportScoreCircle.style.strokeDashoffset = offset;
 
-    // Grade badge color
+    // Determine hiring recommendation status rigorously
+    const recStr = (reportData.hiringRecommendation || '').toLowerCase();
+    const isNoHire = recStr.includes('no hire') || recStr.includes('not recommended') || recStr.includes('needs further preparation') || recStr.includes('needs preparation');
+    const isHire = !isNoHire && (recStr.includes('strong hire') || recStr.startsWith('hire') || recStr.includes('recommended'));
+
+    // Grade badge color & label
     if (reportData.isDisqualified) {
       this.reportLevelBadge.innerText = "DISQUALIFIED";
       this.reportLevelBadge.className = "score-badge fail";
       this.reportLevelBadge.style.background = "rgba(239, 68, 68, 0.15)";
       this.reportLevelBadge.style.color = "var(--color-danger)";
       this.reportLevelBadge.style.borderColor = "var(--color-danger)";
-    } else if (score >= 70) {
+    } else if (reportData.isAborted || (reportData.isEarlyExit && score < 40)) {
+      this.reportLevelBadge.innerText = "INCOMPLETE / ABORTED";
+      this.reportLevelBadge.className = "score-badge fail";
+      this.reportLevelBadge.style.background = "rgba(239, 68, 68, 0.15)";
+      this.reportLevelBadge.style.color = "var(--color-danger)";
+      this.reportLevelBadge.style.borderColor = "var(--color-danger)";
+    } else if (score >= 70 && !isNoHire) {
       this.reportLevelBadge.innerText = "PASSED";
       this.reportLevelBadge.className = "score-badge";
-      this.reportLevelBadge.style.background = "";
-      this.reportLevelBadge.style.color = "";
-      this.reportLevelBadge.style.borderColor = "";
+      this.reportLevelBadge.style.background = "rgba(16, 185, 129, 0.15)";
+      this.reportLevelBadge.style.color = "var(--color-success)";
+      this.reportLevelBadge.style.borderColor = "var(--color-success)";
+    } else if (score >= 50 && !isNoHire) {
+      this.reportLevelBadge.innerText = "BORDERLINE";
+      this.reportLevelBadge.className = "score-badge";
+      this.reportLevelBadge.style.background = "rgba(245, 158, 11, 0.15)";
+      this.reportLevelBadge.style.color = "var(--color-warning)";
+      this.reportLevelBadge.style.borderColor = "var(--color-warning)";
     } else {
-      this.reportLevelBadge.innerText = "NEEDS PRACTICE";
+      this.reportLevelBadge.innerText = "NOT CLEARED";
       this.reportLevelBadge.className = "score-badge fail";
-      this.reportLevelBadge.style.background = "";
-      this.reportLevelBadge.style.color = "";
-      this.reportLevelBadge.style.borderColor = "";
+      this.reportLevelBadge.style.background = "rgba(239, 68, 68, 0.15)";
+      this.reportLevelBadge.style.color = "var(--color-danger)";
+      this.reportLevelBadge.style.borderColor = "var(--color-danger)";
     }
 
     // Strengths
@@ -3203,14 +3235,18 @@ class AppOrchestrator {
     const evalBadge = document.getElementById('eval-hiring-badge');
     if (evalBadge) {
       evalBadge.innerText = reportData.hiringRecommendation ? reportData.hiringRecommendation.split('-')[0].trim() : 'Evaluated';
-      if ((reportData.hiringRecommendation || '').toLowerCase().includes('hire')) {
-        evalBadge.style.background = 'rgba(16, 185, 129, 0.1)';
+      if (isNoHire || reportData.isDisqualified || reportData.isAborted) {
+        evalBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+        evalBadge.style.color = 'var(--color-danger)';
+        evalBadge.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+      } else if (isHire) {
+        evalBadge.style.background = 'rgba(16, 185, 129, 0.15)';
         evalBadge.style.color = 'var(--color-success)';
-        evalBadge.style.borderColor = 'rgba(16, 185, 129, 0.2)';
+        evalBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
       } else {
-        evalBadge.style.background = 'rgba(245, 158, 11, 0.1)';
+        evalBadge.style.background = 'rgba(245, 158, 11, 0.15)';
         evalBadge.style.color = 'var(--color-warning)';
-        evalBadge.style.borderColor = 'rgba(245, 158, 11, 0.2)';
+        evalBadge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
       }
     }
 
@@ -3406,9 +3442,12 @@ class AppOrchestrator {
 
   // End Interview manually / click red button
   async endInterviewEarly() {
-    const confirmed = await this.showCustomConfirm("End Interview", "Are you sure you want to end the interview early? Your feedback will be generated based on the completed questions.");
+    const confirmed = await this.showCustomConfirm(
+      "End Interview",
+      "Are you sure you want to end the interview early? Unattempted questions will be scored as 0 and your evaluation will reflect completed responses."
+    );
     if (confirmed) {
-      this.compileFinalReport();
+      this.compileFinalReport(false, '', true);
     }
   }
 

@@ -9,6 +9,11 @@ import { Jimp } from 'jimp';
 import { spawn } from 'child_process';
 import crypto from 'crypto';
 
+import fetch from 'node-fetch';
+if (!globalThis.fetch) {
+  globalThis.fetch = fetch;
+}
+
 // Load environment variables
 dotenv.config();
 
@@ -1374,18 +1379,27 @@ Generate your response strictly matching the JSON schema.`;
 
 // Endpoint 3: End Interview / Compile Report
 app.post('/api/end-interview', async (req, res) => {
-  const { name, topic, difficulty, history, codingQuestion, codingQuestionsList, codingScoreDetails, candidateCode, codingTestResults, tabWarningsCount, warningCounts, disqualified, disqualificationReason, groqApiKey, violationScreenshots, language } = req.body;
+  const {
+    name, topic, difficulty, history, codingQuestion, codingQuestionsList,
+    codingScoreDetails, candidateCode, codingTestResults, tabWarningsCount,
+    warningCounts, disqualified, disqualificationReason, groqApiKey,
+    violationScreenshots, language, isEarlyExit, totalQuestions, currentQuestionIndex
+  } = req.body;
 
-  console.log(`Generating final report for ${name} on topic "${topic}" (Disqualified: ${disqualified || false}, lang: ${language || 'en-IN'})`);
+  console.log(`Generating final report for ${name} on topic "${topic}" (Disqualified: ${disqualified || false}, lang: ${language || 'en-IN'}, isEarlyExit: ${isEarlyExit || false})`);
+
+  const rawHistory = history || req.body.chatHistory || [];
 
   // Handle immediate proctoring disqualification
   if (disqualified) {
     const formattedReason = disqualificationReason ? disqualificationReason.charAt(0).toUpperCase() + disqualificationReason.slice(1) : "Proctoring Violation";
     const finalReport = {
       overallScore: 0,
+      verbalScore: 0,
+      codingScore: 0,
       strengths: ["Session initiated successfully."],
       improvements: [`DISQUALIFIED: The interview was terminated early due to 5 proctoring violations in the "${formattedReason}" category.`],
-      breakdown: history.map((item, index) => ({
+      breakdown: rawHistory.map((item, index) => ({
         question: item.question,
         answer: item.answer || "(No response)",
         idealAnswer: "N/A - Session Terminated due to disqualification.",
@@ -1406,11 +1420,10 @@ app.post('/api/end-interview', async (req, res) => {
   }
 
   const activeKey = groqApiKey || process.env.GROQ_API_KEY || SECONDARY_GROQ_API_KEY;
-
-  console.log(`Generating final report for ${name} on topic "${topic}"`);
+  const targetTotal = parseInt(totalQuestions) || (Array.isArray(rawHistory) && rawHistory.length > 0 ? rawHistory.length : 5);
 
   // Separate verbal theory history from coding questions
-  const verbalHistory = (history || []).filter(h => !h.isCoding && !h.isCodingChallenge && !h.isCode);
+  const verbalHistory = rawHistory.filter(h => !h.isCoding && !h.isCodingChallenge && !h.isCode);
 
   // Helper to generate a structured fallback Skill Map
   const generateFallbackSkillMap = (historyItems, avgScore, topicName) => {
@@ -1423,7 +1436,7 @@ app.post('/api/end-interview', async (req, res) => {
 
     return domainNames.map((domain, dIdx) => {
       const relatedQuestions = historyItems.filter((_, idx) => idx % domainNames.length === dIdx).map((item, qIdx) => `Q${qIdx + 1}: ${item.question ? item.question.substring(0, 45) + '...' : 'Technical Prompt'}`);
-      const domainScore = Math.min(100, Math.max(35, Math.round(avgScore + (dIdx === 0 ? 5 : (dIdx === 1 ? -4 : (dIdx === 2 ? 2 : -3))))));
+      const domainScore = avgScore <= 5 ? 0 : Math.min(100, Math.max(0, Math.round(avgScore + (dIdx === 0 ? 5 : (dIdx === 1 ? -4 : (dIdx === 2 ? 2 : -3))))));
       const level = domainScore >= 85 ? "Master" : (domainScore >= 70 ? "Proficient" : (domainScore >= 50 ? "Developing" : "Needs Review"));
 
       return {
@@ -1433,13 +1446,88 @@ app.post('/api/end-interview', async (req, res) => {
         questionsCovered: relatedQuestions.length > 0 ? relatedQuestions : [`Foundational ${topicName} Questions`],
         demonstratedCompetence: domainScore >= 70
           ? `Articulated key structural definitions and practical use-cases with technical clarity.`
-          : `Demonstrated preliminary familiarity, though depth was limited on specific runtime details.`,
+          : (domainScore >= 35
+            ? `Demonstrated preliminary familiarity, though depth was limited on specific runtime details.`
+            : `No verified competence demonstrated in this domain during the assessment.`),
         identifiedGaps: domainScore >= 70
           ? `Can deepen operational knowledge around high-throughput edge-case isolation.`
           : `Recommend reviewing core internal mechanisms, lifecycle phases, and error-handling patterns.`
       };
     });
   };
+
+  // Detect if candidate provided ANY substantive answers
+  const isCandidateAnswerValid = (ansText) => {
+    if (!ansText) return false;
+    const a = ansText.trim().toLowerCase();
+    if (!a || a === '(no response)' || a === '(assessment cancelled without response)' || a === 'skip' || a === 'pass' || a === 'next') return false;
+    if (a.includes("don't know") || a.includes("dont know") || a.includes("no idea") || a.includes("can't answer") || a.includes("cant answer")) return false;
+    if (a.includes("कुछ नहीं पता") || a.includes("नहीं पता") || a.includes("पता नहीं") || a.includes("malum nahi") || a.includes("nahi pata")) return false;
+    return a.split(/\s+/).length >= 2;
+  };
+
+  const scoreCandidateAnswer = (ansText, idealAnswer, keywords = []) => {
+    if (!isCandidateAnswerValid(ansText)) return 0;
+    const lowerAns = (ansText || '').toLowerCase();
+    let matchedCount = 0;
+    keywords.forEach(kw => {
+      if (lowerAns.includes(kw.toLowerCase())) matchedCount++;
+    });
+    const ratio = keywords.length > 0 ? matchedCount / keywords.length : 0.5;
+    let score = 30; // base score for genuine attempt
+    if (ratio > 0) score += Math.round(ratio * 60);
+    const wordCount = lowerAns.split(/\s+/).length;
+    score += Math.min(Math.round(wordCount / 4), 10);
+    return Math.max(0, Math.min(100, score));
+  };
+
+  const substantiveAnswersCount = verbalHistory.filter(h => isCandidateAnswerValid(h.answer)).length;
+
+  // STRICT ZERO-SCORE PROTECTION: If candidate answered 0 questions or all answers were empty/skip/don't know
+  if (verbalHistory.length === 0 || substantiveAnswersCount === 0) {
+    console.log(`[Scoring Engine] Candidate ${name} provided 0 substantive responses (attempted: ${verbalHistory.length}/${targetTotal}). Issuing strict 0% score and No Hire.`);
+    const breakdown = verbalHistory.map((item, idx) => ({
+      question: item.question,
+      answer: item.answer || "(No response)",
+      wasCountered: !!item.isCounterQuestion,
+      counterDoubt: item.doubtReason || null,
+      idealAnswer: "A model answer is not available for this question.",
+      feedback: "Zero points awarded. No technical response was provided; the prompt was skipped, answered with uncertainty, or cancelled prematurely.",
+      skill: item.skillDomain || "Technical Competency",
+      score: 0
+    }));
+
+    const skillMap = generateFallbackSkillMap(verbalHistory, 0, topic);
+
+    return res.json({
+      overallScore: 0,
+      verbalScore: 0,
+      codingScore: null,
+      executiveSummary: `${name} initiated the ${difficulty}-level mock technical assessment specializing in "${topic}". However, the candidate did not provide any substantive technical answers—prompts were either left unanswered, skipped, acknowledged with unfamiliarity, or the session was ended prematurely during question ${verbalHistory.length || 1} of ${targetTotal}.\n\nBecause no technical explanations, architectural definitions, or code solutions were submitted, no competency could be validated. Under formal evaluation guidelines, the candidate receives an assessment score of 0% and a No Hire determination for this role.`,
+      knowledgeDepthAssessment: "Zero technical depth demonstrated. All presented questions were skipped, unanswered, or acknowledged with unfamiliarity.",
+      communicationAndClarity: "Unable to evaluate technical communication due to the absence of substantive verbal responses.",
+      hiringRecommendation: "No Hire - Assessment was terminated early or no valid technical responses were provided.",
+      strengths: ["No verified technical competencies demonstrated during this assessment."],
+      improvements: [
+        `Attempt every scheduled technical question and explain your thought process.`,
+        `Review foundational and architectural concepts for ${topic} before re-attempting.`,
+        `Do not exit or cancel the interview session prematurely.`
+      ],
+      skillMap,
+      breakdown,
+      codingFeedback: "No coding challenge was attempted or completed.",
+      codingScoreDetails: [],
+      codingTestResults: null,
+      generalTips: [
+        "Always define the core term and its purpose before discussing practical advantages.",
+        "Attempt every prompt and explain your reasoning even when uncertain.",
+        "Complete the full assessment session to allow fair skill evaluation."
+      ],
+      isAborted: true,
+      isEarlyExit: isEarlyExit || (verbalHistory.length < targetTotal),
+      isMock: true
+    });
+  }
 
   if (!activeKey) {
     // FALLBACK MODE - Smart local evaluation
@@ -1514,8 +1602,8 @@ app.post('/api/end-interview', async (req, res) => {
     });
 
     const averageTheoryScore = breakdown.length > 0 
-      ? Math.round(breakdown.reduce((sum, item) => sum + item.score, 0) / breakdown.length) 
-      : 70;
+      ? Math.round(breakdown.reduce((sum, item) => sum + item.score, 0) / Math.max(targetTotal, breakdown.length)) 
+      : 0;
 
     // Evaluate code programmatically if coding challenge was completed
     const passedCount = codingTestResults ? parseInt(codingTestResults.passedCount) || 0 : 0;
@@ -1541,19 +1629,33 @@ app.post('/api/end-interview', async (req, res) => {
         : `Your solution for "${codingQuestion?.title || 'Coding Challenge'}" passed ${passedCount} out of ${totalCount} test cases. Review the failing inputs or boundary constraints.`;
     }
 
-    const executiveSummary = `${name} participated in a ${difficulty}-level mock technical interview specializing in ${topic}. Throughout the verbal theory questions, the candidate demonstrated ${averageTheoryScore >= 75 ? 'a solid technical foundation and clear conceptual command' : 'introductory familiarity, though several topics would benefit from deeper architectural precision'}. Their explanations revealed a capable understanding of core definitions, while follow-up probing provided an opportunity to observe their resilience and reasoning under scrutiny.\n\nThe verbal discussion explored both fundamental principles and operational trade-offs. The candidate exhibited a structured communication posture, articulating technical concepts with sincerity and focus. Overall, this assessment reflects a candidate with ${averageTheoryScore >= 75 ? 'strong engineering potential who is well-positioned for practical engineering responsibilities' : 'valuable foundational knowledge who will benefit from targeted review of advanced architectural patterns'}.`;
+    const isFailing = averageTheoryScore < 50 || substantiveAnswersCount === 0;
 
-    const knowledgeDepthAssessment = `The candidate demonstrated ${averageTheoryScore >= 75 ? 'commendable' : 'moderate'} depth across the assessed technical domains. Primary definitional inquiries were handled with reasonable accuracy. During adaptive follow-up and counter-probing on ambiguous points, the candidate ${averageTheoryScore >= 75 ? 'defended their architectural choices with coherent rationale' : 'showed minor hesitation when describing low-level execution mechanics'}.`;
+    const executiveSummary = isFailing
+      ? `${name} completed an assessment for ${difficulty}-level in "${topic}", but achieved an average score of ${averageTheoryScore}%. The candidate showed limited or incomplete mastery of core engineering principles across the evaluated questions. Targeted study of essential concepts and architectural mechanics is required.`
+      : `${name} participated in a ${difficulty}-level mock technical interview specializing in ${topic}. Throughout the verbal theory questions, the candidate demonstrated ${averageTheoryScore >= 75 ? 'a solid technical foundation and clear conceptual command' : 'introductory familiarity, though several topics would benefit from deeper architectural precision'}. Their explanations revealed a capable understanding of core definitions, while follow-up probing provided an opportunity to observe their resilience and reasoning under scrutiny.`;
 
-    const communicationAndClarity = `Verbal communication was ${averageTheoryScore >= 75 ? 'clear, professional, and well-paced' : 'comprehensible but occasionally brief'}. Utilizing standardized industry terminology and speaking proactively about performance trade-offs and failure scenarios will further strengthen technical presence.`;
+    const knowledgeDepthAssessment = isFailing
+      ? `The candidate demonstrated minimal depth across the assessed technical areas. Fundamental definitions were either omitted or incomplete, and follow-up probes revealed critical knowledge gaps.`
+      : `The candidate demonstrated ${averageTheoryScore >= 75 ? 'commendable' : 'moderate'} depth across the assessed technical domains. Primary definitional inquiries were handled with reasonable accuracy.`;
+
+    const communicationAndClarity = isFailing
+      ? `Technical communication was brief or incomplete. Developing structured answers that cite concrete technical terms and system mechanics will improve interview performance.`
+      : `Verbal communication was ${averageTheoryScore >= 75 ? 'clear, professional, and well-paced' : 'comprehensible but occasionally brief'}.`;
 
     const hiringRecommendation = averageTheoryScore >= 80 
       ? "Strong Hire - Candidate demonstrated robust conceptual mastery and solid technical articulation."
       : (averageTheoryScore >= 68 
         ? "Hire - Competent engineer with dependable foundational knowledge and minor growth opportunities."
-        : (averageTheoryScore >= 52 
+        : (averageTheoryScore >= 50 
           ? "Leaning Hire - Demonstrates potential; recommend targeted preparation in complex architectural edge cases."
-          : "Needs Further Preparation - Recommend dedicated study of core system mechanics and practical application."));
+          : "No Hire - Technical responses fell below the required competency threshold."));
+
+    const strengths = isFailing
+      ? ["No verified technical competencies demonstrated in the submitted responses."]
+      : (overallScore >= 70 
+        ? ["Demonstrated solid comprehension of primary technical concepts.", "Used standard technical terminology effectively.", "Engaged constructively with interview probing."]
+        : ["Attempted all core technical questions with sincerity.", "Clear, audible communication cadence.", "Demonstrated willingness to tackle complex prompts."]);
 
     const improvements = overallScore >= 70
       ? ["Deepen architectural explanations for high-concurrency systems.", "Illustrate trade-offs between memory footprint and latency.", "Optimize code time and space complexity in algorithmic solutions."]
@@ -1573,9 +1675,7 @@ app.post('/api/end-interview', async (req, res) => {
       knowledgeDepthAssessment,
       communicationAndClarity,
       hiringRecommendation,
-      strengths: overallScore >= 70 
-        ? ["Demonstrated solid comprehension of primary technical concepts.", "Used standard technical terminology effectively.", "Engaged constructively with interview probing."]
-        : ["Attempted all core technical questions with sincerity.", "Clear, audible communication cadence.", "Demonstrated willingness to tackle complex prompts."],
+      strengths,
       improvements,
       skillMap,
       breakdown,
@@ -1614,7 +1714,7 @@ You must return your response in a clean, valid JSON object containing:
 - "knowledgeDepthAssessment": A detailed analytical paragraph evaluating the candidate's conceptual depth, mastery of edge cases, and how effectively they responded to counter-probing or clarified doubts.
 - "communicationAndClarity": An analytical paragraph evaluating verbal precision, technical vocabulary, structure, and conciseness.
 - "hiringRecommendation": A clear verdict ("Strong Hire", "Hire", "Leaning Hire", "Needs Further Preparation", "No Hire") with a detailed professional rationale.
-- "strengths": Array of 3-5 specific, evidence-backed strengths observed in the verbal responses.
+- "strengths": Array of 1-4 specific, evidence-backed strengths observed in the verbal responses. NOTE: If candidate gave no substantive answers or scored below 40, you MUST return: ["No verified technical competencies demonstrated in the submitted responses."].
 - "improvements": Array of 3-5 concrete growth areas with actionable recommendations.
 - "skillMap": Array of 3-5 competency domains evaluated across the questions and answers:
   Each item in "skillMap":
@@ -1640,20 +1740,28 @@ You must return your response in a clean, valid JSON object containing:
   }
 - "generalTips": Array of 3-4 professional career and technical interview tips.
 
-SCORING RULES (CRITICAL):
+SCORING RULES (CRITICAL INTEGRITY):
 1. Grade the answers strictly against the correct technical definitions of the concepts asked.
-2. If the candidate's answer is extremely short, irrelevant, gibberish, or says "I don't know", "skip", "pass", or left empty, award a score of EXACTLY 0.
-3. Award scores strictly based on the following rubric:
+2. If candidate's answer is extremely short, irrelevant, gibberish, or says "I don't know", "skip", "pass", "मुझे कुछ नहीं पता", or left empty, award a score of EXACTLY 0.
+3. Scoring Rubric for each question:
    - 90-100: Complete, accurate, detailed answer with deep technical terminology and code/architectural understanding.
    - 70-89: Generally correct, covers main definitions, but lacks detail or minor aspects are omitted.
    - 40-69: Partially correct or very brief, misses major definitions or concepts.
    - 1-39: Extremely brief or contains major technical inaccuracies.
-   - 0: Empty, skipped, or equivalent to "I don't know".
-4. If 'Tab switching warning violations count' is greater than 0, add a warning under 'improvements' stating: "Ensure compliance with interview guidelines (detected X tab changes)." where X is the count.`;
+   - 0: Empty, skipped, or equivalent to "I don't know" / non-responsive.
+4. Total Expected Questions: The candidate was planned for ${targetTotal} total questions.
+   - Total verbalScore MUST be (Sum of breakdown scores) / ${targetTotal}.
+   - If candidate completed fewer questions or exited early, unattempted questions count as 0.
+5. NEVER fabricate fake compliments (e.g., "candidate stayed calm", "polite response", "spoke in their chosen language") if technical knowledge was absent. If overall score is under 40 or answers were non-substantive, strengths MUST state "No verified technical competencies demonstrated in the submitted responses." and hiringRecommendation MUST be "No Hire".
+6. If 'Tab switching warning violations count' is greater than 0, add a warning under 'improvements' stating: "Ensure compliance with interview guidelines (detected X tab changes)." where X is the count.`;
 
   const prompt = `Candidate: ${name}
 Role / Seniority: ${difficulty} level mock interview for "${topic}".
 Interview Language: ${language || 'English'}
+Planned Total Questions: ${targetTotal}
+Questions Recorded: ${verbalHistory.length}
+Substantive Technical Answers: ${substantiveAnswersCount}
+Early Exit / Incomplete: ${isEarlyExit ? 'YES' : 'NO'}
 Tab switching warning violations count: ${tabWarningsCount || 0}
 
 VERBAL TECHNICAL INTERVIEW TRANSCRIPT (ALL VERBAL QUESTIONS & CANDIDATE RESPONSES):
@@ -1663,7 +1771,7 @@ INSTRUCTIONS:
 1. Conduct an in-depth, fair knowledge analysis of the candidate's verbal responses. Note where the candidate had doubts or where the AI countered and gave them a chance to clarify.
 2. Formulate the Formal Natural Evaluation Report with executiveSummary, knowledgeDepthAssessment, communicationAndClarity, hiringRecommendation, strengths, improvements, generalTips.
 3. Construct the comprehensive Skill Map mapping the questions asked and candidate's responses into distinct competency domains with individual scores (0-100) and levels ("Master", "Proficient", "Developing", "Needs Review").
-4. Score each question objectively under "breakdown".
+4. Score each question objectively under "breakdown" using the strict 0-100 rubric.
 5. Return strictly valid JSON matching the systemPrompt schema.`;
 
   try {
@@ -1688,10 +1796,50 @@ INSTRUCTIONS:
         : `Your solution for "${codingQuestion?.title || 'Coding Challenge'}" passed ${passedCount} out of ${totalCount} test cases. Review the failing inputs or boundary constraints.`;
     }
 
-    const verbalScore = parseInt(aiResponse.overallScore) || 75;
+    // Mathematically verify verbalScore from breakdown items
+    const parsedBreakdown = Array.isArray(aiResponse.breakdown) ? aiResponse.breakdown : [];
+    let breakdownSum = 0;
+    parsedBreakdown.forEach(item => {
+      const qScore = parseInt(item.score);
+      item.score = !isNaN(qScore) ? Math.max(0, Math.min(100, qScore)) : 0;
+      breakdownSum += item.score;
+    });
+
+    const divisor = Math.max(targetTotal, parsedBreakdown.length, 1);
+    const calculatedVerbalScore = Math.round(breakdownSum / divisor);
+
+    let rawScore = parseInt(aiResponse.overallScore);
+    if (isNaN(rawScore)) {
+      rawScore = calculatedVerbalScore;
+    } else {
+      rawScore = Math.max(0, Math.min(100, rawScore));
+    }
+
+    // Enforce truth in scoring: cannot exceed mathematically averaged breakdown
+    const verbalScore = (substantiveAnswersCount === 0) 
+      ? 0 
+      : Math.min(rawScore, calculatedVerbalScore);
+
     const compositeScore = hasCoding 
       ? Math.round((verbalScore * 0.6) + (codingScore * 0.4)) 
       : verbalScore;
+
+    const isFailing = compositeScore < 50 || substantiveAnswersCount === 0 || (isEarlyExit && compositeScore < 60);
+
+    let finalRecommendation = aiResponse.hiringRecommendation || (compositeScore >= 70 ? 'Hire' : 'No Hire');
+    if (isFailing && !finalRecommendation.toLowerCase().includes('no hire')) {
+      finalRecommendation = 'No Hire';
+    }
+
+    let finalStrengths = Array.isArray(aiResponse.strengths) ? aiResponse.strengths : [];
+    if (compositeScore < 40 || substantiveAnswersCount === 0 || finalStrengths.length === 0) {
+      finalStrengths = ["No verified technical competencies demonstrated in the submitted responses."];
+    }
+
+    let finalSkillMap = Array.isArray(aiResponse.skillMap) ? aiResponse.skillMap : [];
+    if (substantiveAnswersCount === 0 || verbalScore === 0) {
+      finalSkillMap = generateFallbackSkillMap(verbalHistory, 0, topic);
+    }
 
     res.json({
       overallScore: compositeScore,
@@ -1700,11 +1848,11 @@ INSTRUCTIONS:
       executiveSummary: aiResponse.executiveSummary || '',
       knowledgeDepthAssessment: aiResponse.knowledgeDepthAssessment || '',
       communicationAndClarity: aiResponse.communicationAndClarity || '',
-      hiringRecommendation: aiResponse.hiringRecommendation || 'Hire',
-      strengths: aiResponse.strengths || [],
+      hiringRecommendation: finalRecommendation,
+      strengths: finalStrengths,
       improvements: aiResponse.improvements || [],
-      skillMap: aiResponse.skillMap || [],
-      breakdown: aiResponse.breakdown || [],
+      skillMap: finalSkillMap,
+      breakdown: parsedBreakdown,
       codingFeedback: codingFeedbackStr,
       codingScoreDetails: codingScoreDetails || [],
       codingTestResults: codingTestResults || null,
@@ -1727,21 +1875,30 @@ INSTRUCTIONS:
         return itemQuestionClean.includes(questionTextClean) || questionTextClean.includes(itemQuestionClean);
       }) || { question: item.question, idealAnswer: "A model answer is not available for this question.", keywords: [] };
 
+      const isSubstantive = isCandidateAnswerValid(item.answer);
+      const score = isSubstantive
+        ? scoreCandidateAnswer(item.answer, matchedQ.idealAnswer, matchedQ.keywords || [])
+        : 0;
+
       return {
         question: item.question,
         answer: item.answer || "(No response)",
         wasCountered: !!item.isCounterQuestion,
         counterDoubt: item.doubtReason || null,
         idealAnswer: matchedQ.idealAnswer,
-        feedback: "Strong attempt. Review key documentations for optimal performance.",
+        feedback: isSubstantive 
+          ? "Answer evaluated against foundational standards." 
+          : "No substantive technical answer provided.",
         skill: item.skillDomain || "Technical Competency",
-        score: 75
+        score
       };
     });
 
-    const averageTheoryScore = breakdown.length > 0
-      ? Math.round(breakdown.reduce((sum, item) => sum + item.score, 0) / breakdown.length)
-      : 75;
+    const sumTheory = breakdown.reduce((sum, item) => sum + item.score, 0);
+    const divisor = Math.max(targetTotal, breakdown.length, 1);
+    const averageTheoryScore = substantiveAnswersCount === 0 
+      ? 0 
+      : Math.round(sumTheory / divisor);
 
     const passedCount = codingTestResults ? parseInt(codingTestResults.passedCount) || 0 : 0;
     const totalCount = codingTestResults ? parseInt(codingTestResults.totalCount) || 3 : 3;
@@ -1758,7 +1915,11 @@ INSTRUCTIONS:
       codingFeedbackStr = `Passed ${passedCount}/${totalCount} test cases.`;
     }
 
-    const executiveSummary = `${name} completed the ${difficulty}-level mock technical interview for ${topic}. The candidate exhibited steady familiarity with foundational topics and answered technical questions with clarity and focus. While primary concepts were articulated adequately, further exploration into complex system architecture and edge-case guarantees will strengthen their overall engineering profile.`;
+    const isFailing = overallScore < 50 || substantiveAnswersCount === 0 || (isEarlyExit && overallScore < 60);
+
+    const executiveSummary = isFailing
+      ? `${name} attempted the ${difficulty}-level mock technical interview for ${topic}. The interview was concluded with insufficient technical responses to demonstrate required competency. Foundational concepts in "${topic}" need substantial study before reapplying.`
+      : `${name} completed the ${difficulty}-level mock technical interview for ${topic}. The candidate exhibited steady familiarity with foundational topics and answered technical questions with clarity and focus. While primary concepts were articulated adequately, further exploration into complex system architecture and edge-case guarantees will strengthen their overall engineering profile.`;
 
     const skillMap = generateFallbackSkillMap(verbalHistory, averageTheoryScore, topic);
 
@@ -1767,11 +1928,21 @@ INSTRUCTIONS:
       verbalScore: averageTheoryScore,
       codingScore: hasCoding ? codingScore : null,
       executiveSummary,
-      knowledgeDepthAssessment: "Demonstrated solid grasp of primary definitions with opportunities to expand on high-scale edge cases.",
-      communicationAndClarity: "Clear and professional technical articulation.",
-      hiringRecommendation: "Hire - Capable candidate with solid technical foundations.",
-      strengths: ["Clear response delivery.", "Solid structural understanding of the topic.", "Completed the interview session with focus."],
-      improvements: ["Provide more production-level examples.", "Address edge-cases in technical explanations.", "Analyze time complexity of code."],
+      knowledgeDepthAssessment: isFailing
+        ? "Unable to verify depth of technical knowledge due to lack of substantive responses."
+        : "Demonstrated solid grasp of primary definitions with opportunities to expand on high-scale edge cases.",
+      communicationAndClarity: isFailing
+        ? "Limited communication recorded during the technical evaluation session."
+        : "Clear and professional technical articulation.",
+      hiringRecommendation: isFailing
+        ? "No Hire - Performance did not meet minimum competency requirements."
+        : (overallScore >= 70 ? "Hire - Capable candidate with solid technical foundations." : "Needs Further Preparation"),
+      strengths: isFailing
+        ? ["No verified technical competencies demonstrated in the submitted responses."]
+        : ["Clear response delivery.", "Solid structural understanding of the topic.", "Completed the interview session with focus."],
+      improvements: isFailing
+        ? ["Review foundational documentation and complete practice questions before retaking.", "Provide detailed explanations including definitions, architecture, and examples."]
+        : ["Provide more production-level examples.", "Address edge-cases in technical explanations.", "Analyze time complexity of code."],
       skillMap,
       breakdown,
       codingFeedback: `${codingFeedbackStr} Attempted solution for "${codingQuestion?.title || 'Challenge'}".`,
